@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "278488020974",
+    "project_id": "doable-ab-testing",
+    "storage_bucket": "doable-ab-testing.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:278488020974:android:4ed5ea8603d52552c0c0ff",
+        "android_client_info": {
+          "package_name": "com.mariusapps.doable_ab_testing"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzTIfaPJZBCdsfiRGfLaszQwfFBNlu48o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
