@@ -65,4 +65,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'doable-ab-testing.firebasestorage.app',
     iosBundleId: 'com.mariusapps.doableAbTesting',
   );
+
 }
