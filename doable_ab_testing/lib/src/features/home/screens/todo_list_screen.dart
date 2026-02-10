@@ -1,4 +1,5 @@
 import 'package:doable_ab_testing/src/core/services/remote_config_service.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/todo_model.dart';
@@ -15,6 +16,9 @@ class _TodoListScreenState extends State<TodoListScreen> {
   final TextEditingController _controller = TextEditingController();
   final _remoteConfig = RemoteConfigService();
 
+  int _secretTapCount = 0;
+  DateTime _lastTapTime = DateTime.now();
+
   Color _getThemeColor(String colorName) {
     switch (colorName) {
       case 'purple':
@@ -27,13 +31,17 @@ class _TodoListScreenState extends State<TodoListScreen> {
     }
   }
 
-  void _addTodo() {
+  void _addTodo() async {
     if (_controller.text.isEmpty) return;
 
     setState(() {
       _todos.add(Todo(id: DateTime.now().toString(), title: _controller.text));
     });
 
+    await FirebaseAnalytics.instance.logEvent(
+      name: 'add_todo',
+      parameters: {'title': _controller.text},
+    );
     _controller.clear();
   }
 
@@ -49,6 +57,43 @@ class _TodoListScreenState extends State<TodoListScreen> {
     });
   }
 
+  void _setOverrideColor() {
+    final service = RemoteConfigService();
+    String current = service.primaryColorString;
+
+    if (current == 'blue') {
+      service.setDebugColor('deep_purple');
+    } else if (current == 'deep_purple') {
+      service.setDebugColor('purple');
+    } else {
+      service.setDebugColor(null);
+    }
+
+    setState(() {});
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Debug Modus: ${service.primaryColorString}")),
+      );
+    }
+  }
+
+  void _handleSecretDebugTap() {
+    final now = DateTime.now();
+
+    if (now.difference(_lastTapTime) > const Duration(seconds: 1)) {
+      _secretTapCount = 0;
+    }
+
+    _lastTapTime = now;
+    _secretTapCount++;
+
+    if (_secretTapCount >= 5) {
+      _setOverrideColor();
+      _secretTapCount = 0;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final String colorString = _remoteConfig.primaryColorString;
@@ -56,9 +101,12 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "Firebase ToDo List Demo",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: GestureDetector(
+          onTap: _handleSecretDebugTap,
+          child: const Text(
+            "Firebase ToDo List Demo",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
         ),
         backgroundColor: primaryColor,
         leading: IconButton(

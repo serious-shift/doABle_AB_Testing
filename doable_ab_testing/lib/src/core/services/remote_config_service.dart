@@ -7,6 +7,8 @@ class RemoteConfigService {
 
   final FirebaseRemoteConfig _remoteConfig = FirebaseRemoteConfig.instance;
 
+  String? _debugOverrideColor;
+
   Future<void> initialize() async {
     try {
       // Fallback if user is offline
@@ -35,5 +37,14 @@ class RemoteConfigService {
     return updated;
   }
 
-  String get primaryColorString => _remoteConfig.getString('primary_color');
+  void setDebugColor(String? color) {
+    _debugOverrideColor = color;
+  }
+
+  String get primaryColorString {
+    if (_debugOverrideColor != null) {
+      return _debugOverrideColor!;
+    }
+    return _remoteConfig.getString('primary_color');
+  }
 }
