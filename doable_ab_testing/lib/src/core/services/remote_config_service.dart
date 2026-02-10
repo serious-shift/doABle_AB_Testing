@@ -10,10 +10,7 @@ class RemoteConfigService {
   Future<void> initialize() async {
     try {
       // Fallback if user is offline
-      await _remoteConfig.setDefaults({
-        'show_new_feature': false,
-        'promo_text': 'Willkommen!',
-      });
+      await _remoteConfig.setDefaults({'primary_color': '0xFF9C27B0'});
 
       // Fetch and activate remote config
       await _remoteConfig.setConfigSettings(
@@ -32,6 +29,11 @@ class RemoteConfigService {
     }
   }
 
-  bool get showNewFeature => _remoteConfig.getBool('show_new_feature');
-  String get promoText => _remoteConfig.getString('promo_text');
+  Future<bool> fetchAndActivate() async {
+    bool updated = await _remoteConfig.fetchAndActivate();
+    print("Remote Config manually refreshed: $updated");
+    return updated;
+  }
+
+  String get primaryColorString => _remoteConfig.getString('primary_color');
 }
