@@ -1,8 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:doable_ab_testing/src/core/services/remote_config_service.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
-
-import '../../../widgets/todo_model.dart';
 
 class TodoListScreen extends StatefulWidget {
   const TodoListScreen({super.key});
@@ -12,9 +11,12 @@ class TodoListScreen extends StatefulWidget {
 }
 
 class _TodoListScreenState extends State<TodoListScreen> {
-  final List<Todo> _todos = [];
   final TextEditingController _controller = TextEditingController();
   final _remoteConfig = RemoteConfigService();
+
+  final CollectionReference _todosRef = FirebaseFirestore.instance.collection(
+    'todos',
+  );
 
   int _secretTapCount = 0;
   DateTime _lastTapTime = DateTime.now();
@@ -34,8 +36,10 @@ class _TodoListScreenState extends State<TodoListScreen> {
   void _addTodo() async {
     if (_controller.text.isEmpty) return;
 
-    setState(() {
-      _todos.add(Todo(id: DateTime.now().toString(), title: _controller.text));
+    _todosRef.add({
+      'title': _controller.text,
+      'isDone': false,
+      'timestamp': FieldValue.serverTimestamp(),
     });
 
     await FirebaseAnalytics.instance.logEvent(
@@ -45,16 +49,24 @@ class _TodoListScreenState extends State<TodoListScreen> {
     _controller.clear();
   }
 
-  void _toggleTodo(int index) {
-    setState(() {
-      _todos[index].isDone = !_todos[index].isDone;
-    });
+  void _toggleTodo(String docId, bool currentStatus) {
+    _todosRef.doc(docId).update({'isDone': !currentStatus});
   }
 
-  void _clearAll() {
-    setState(() {
-      _todos.removeWhere((todo) => todo.isDone);
-    });
+  void _deleteTodo(String docId) {
+    _todosRef.doc(docId).delete();
+  }
+
+  Future<void> _clearCompleted() async {
+    final querySnapshot = await _todosRef
+        .where('isDone', isEqualTo: true)
+        .get();
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in querySnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 
   void _setOverrideColor() {
@@ -125,32 +137,84 @@ class _TodoListScreenState extends State<TodoListScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _todos.isEmpty
-                ? const Center(child: Text("Keine Aufgaben vorhanden"))
-                : ListView.builder(
-                    itemCount: _todos.length,
-                    itemBuilder: (ctx, index) {
-                      final todo = _todos[index];
-                      return ListTile(
-                        leading: Checkbox(
-                          value: todo.isDone,
-                          onChanged: (_) => _toggleTodo(index),
-                          activeColor: primaryColor,
+            child: StreamBuilder(
+              stream: _todosRef
+                  .orderBy('timestamp', descending: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError)
+                  return const Text('Etwas ist schief gelaufen');
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final data = snapshot.requireData;
+                if (data.size == 0) {
+                  return const Center(child: Text("Keine Aufgaben vorhanden"));
+                }
+
+                return ListView.builder(
+                  itemCount: data.size,
+                  itemBuilder: (context, index) {
+                    final doc = data.docs[index];
+                    final Map<String, dynamic> todoData =
+                        doc.data() as Map<String, dynamic>;
+
+                    return ListTile(
+                      leading: Checkbox(
+                        value: todoData['isDone'] ?? false,
+                        onChanged: (_) =>
+                            _toggleTodo(doc.id, todoData['isDone']),
+                        activeColor: primaryColor,
+                      ),
+                      title: Text(
+                        todoData['title'] ?? '',
+                        style: TextStyle(
+                          decoration: (todoData['isDone'] ?? false)
+                              ? TextDecoration.lineThrough
+                              : null,
+                          color: (todoData['isDone'] ?? false)
+                              ? Colors.grey
+                              : Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
                         ),
-                        title: Text(
-                          todo.title,
-                          style: TextStyle(
-                            decoration: todo.isDone
-                                ? TextDecoration.lineThrough
-                                : null,
-                            color: todo.isDone ? Colors.grey : Colors.black,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                      ),
+                      trailing: IconButton(
+                        onPressed: () => _deleteTodo(doc.id),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+            // child: _todos.isEmpty
+            //     ? const Center(child: Text("Keine Aufgaben vorhanden"))
+            //     : ListView.builder(
+            //         itemCount: _todos.length,
+            //         itemBuilder: (ctx, index) {
+            //           final todo = _todos[index];
+            //           return ListTile(
+            //             leading: Checkbox(
+            //               value: todo.isDone,
+            //               onChanged: (_) => _toggleTodo(index),
+            //               activeColor: primaryColor,
+            //             ),
+            //             title: Text(
+            //               todo.title,
+            //               style: TextStyle(
+            //                 decoration: todo.isDone
+            //                     ? TextDecoration.lineThrough
+            //                     : null,
+            //                 color: todo.isDone ? Colors.grey : Colors.black,
+            //                 fontSize: 16,
+            //                 fontWeight: FontWeight.w500,
+            //               ),
+            //             ),
+            //           );
+            //         },
+            //       ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 32),
@@ -195,7 +259,10 @@ class _TodoListScreenState extends State<TodoListScreen> {
                         ),
                       ),
                     ),
-                    IconButton(onPressed: _clearAll, icon: Icon(Icons.delete)),
+                    IconButton(
+                      onPressed: _clearCompleted,
+                      icon: Icon(Icons.delete),
+                    ),
                   ],
                 ),
               ],
